@@ -94,6 +94,7 @@
 #     )
 # else:
 #     st.write("Please upload a CSV file to begin analysis.")
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -107,7 +108,25 @@ def is_numeric(value):
     except (ValueError, TypeError):
         return False
 
+def safe_convert_to_numeric(value):
+    if pd.isna(value):
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
 def recommend_sql_type(col_name, min_val, max_val, dtype):
+    min_val = safe_convert_to_numeric(min_val)
+    max_val = safe_convert_to_numeric(max_val)
+    
+    if min_val is None or max_val is None:
+        return "TEXT"
+    
     if pd.api.types.is_string_dtype(dtype):
         max_length = max(len(str(min_val)), len(str(max_val)))
         if max_length <= 255:
@@ -115,9 +134,6 @@ def recommend_sql_type(col_name, min_val, max_val, dtype):
         else:
             return "TEXT"
     elif pd.api.types.is_integer_dtype(dtype) or pd.api.types.is_float_dtype(dtype):
-        if not is_numeric(min_val) or not is_numeric(max_val):
-            return "TEXT"
-        min_val, max_val = float(min_val), float(max_val)
         if min_val.is_integer() and max_val.is_integer():
             min_val, max_val = int(min_val), int(max_val)
             if min_val >= 0:
@@ -189,11 +205,14 @@ if uploaded_file is not None:
         
         # Additional logic for DECIMAL type
         if sql_type in ["FLOAT", "DOUBLE"]:
-            max_decimal_places = max(get_decimal_places(min_val), get_decimal_places(max_val))
-            max_integer_digits = max(len(str(int(float(min_val)))), len(str(int(float(max_val)))))
-            total_digits = max_integer_digits + max_decimal_places
-            if total_digits <= 65:
-                sql_type = f"DECIMAL({total_digits},{max_decimal_places})"
+            min_val = safe_convert_to_numeric(min_val)
+            max_val = safe_convert_to_numeric(max_val)
+            if min_val is not None and max_val is not None:
+                max_decimal_places = max(get_decimal_places(min_val), get_decimal_places(max_val))
+                max_integer_digits = max(len(str(int(abs(min_val)))), len(str(int(abs(max_val)))))
+                total_digits = max_integer_digits + max_decimal_places
+                if total_digits <= 65:
+                    sql_type = f"DECIMAL({total_digits},{max_decimal_places})"
         
         results.append({
             "Column": col,
