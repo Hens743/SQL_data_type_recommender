@@ -98,8 +98,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import decimal
-import openpyxl
 
 def is_numeric(value):
     try:
@@ -186,10 +184,13 @@ if uploaded_file is not None:
         series = df[col]
         sql_type = recommend_sql_type(col, series)
         
+        min_val = series.min() if not series.empty else None
+        max_val = series.max() if not series.empty else None
+        
         results.append({
             "Column": col,
-            "Min": series.min() if not series.empty else None,
-            "Max": series.max() if not series.empty else None,
+            "Min": min_val,
+            "Max": max_val,
             "Python Type": series.dtype,
             "Recommended SQL Type": sql_type
         })
@@ -205,5 +206,6 @@ if uploaded_file is not None:
     )
 else:
     st.write("Please upload a CSV or Excel file to begin analysis.")
+
 
 
