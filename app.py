@@ -94,12 +94,18 @@
 #     )
 # else:
 #     st.write("Please upload a CSV file to begin analysis.")
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import decimal
 import openpyxl
+
+def is_numeric(value):
+    try:
+        float(value)
+        return True
+    except (ValueError, TypeError):
+        return False
 
 def recommend_sql_type(col_name, min_val, max_val, dtype):
     if pd.api.types.is_string_dtype(dtype):
@@ -108,34 +114,39 @@ def recommend_sql_type(col_name, min_val, max_val, dtype):
             return f"VARCHAR({max_length})"
         else:
             return "TEXT"
-    elif pd.api.types.is_integer_dtype(dtype):
-        if min_val >= 0:
-            if max_val <= 255:
-                return "TINYINT UNSIGNED"
-            elif max_val <= 65535:
-                return "SMALLINT UNSIGNED"
-            elif max_val <= 16777215:
-                return "MEDIUMINT UNSIGNED"
-            elif max_val <= 4294967295:
-                return "INT UNSIGNED"
+    elif pd.api.types.is_integer_dtype(dtype) or pd.api.types.is_float_dtype(dtype):
+        if not is_numeric(min_val) or not is_numeric(max_val):
+            return "TEXT"
+        min_val, max_val = float(min_val), float(max_val)
+        if min_val.is_integer() and max_val.is_integer():
+            min_val, max_val = int(min_val), int(max_val)
+            if min_val >= 0:
+                if max_val <= 255:
+                    return "TINYINT UNSIGNED"
+                elif max_val <= 65535:
+                    return "SMALLINT UNSIGNED"
+                elif max_val <= 16777215:
+                    return "MEDIUMINT UNSIGNED"
+                elif max_val <= 4294967295:
+                    return "INT UNSIGNED"
+                else:
+                    return "BIGINT UNSIGNED"
             else:
-                return "BIGINT UNSIGNED"
+                if min_val >= -128 and max_val <= 127:
+                    return "TINYINT"
+                elif min_val >= -32768 and max_val <= 32767:
+                    return "SMALLINT"
+                elif min_val >= -8388608 and max_val <= 8388607:
+                    return "MEDIUMINT"
+                elif min_val >= -2147483648 and max_val <= 2147483647:
+                    return "INT"
+                else:
+                    return "BIGINT"
         else:
-            if min_val >= -128 and max_val <= 127:
-                return "TINYINT"
-            elif min_val >= -32768 and max_val <= 32767:
-                return "SMALLINT"
-            elif min_val >= -8388608 and max_val <= 8388607:
-                return "MEDIUMINT"
-            elif min_val >= -2147483648 and max_val <= 2147483647:
-                return "INT"
+            if -3.4e38 <= min_val <= max_val <= 3.4e38:
+                return "FLOAT"
             else:
-                return "BIGINT"
-    elif pd.api.types.is_float_dtype(dtype):
-        if -3.4e38 <= min_val <= max_val <= 3.4e38:
-            return "FLOAT"
-        else:
-            return "DOUBLE"
+                return "DOUBLE"
     elif pd.api.types.is_datetime64_any_dtype(dtype):
         return "DATETIME"
     elif pd.api.types.is_timedelta64_dtype(dtype):
@@ -148,7 +159,9 @@ def recommend_sql_type(col_name, min_val, max_val, dtype):
         return "TEXT"
 
 def get_decimal_places(value):
-    return abs(decimal.Decimal(str(value)).as_tuple().exponent)
+    if not is_numeric(value):
+        return 0
+    return abs(decimal.Decimal(str(float(value))).as_tuple().exponent)
 
 st.title("Universal Dataset Analyzer and SQL Type Recommender")
 
@@ -157,10 +170,14 @@ uploaded_file = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xls
 if uploaded_file is not None:
     file_extension = uploaded_file.name.split(".")[-1].lower()
     
-    if file_extension == "csv":
-        df = pd.read_csv(uploaded_file)
-    elif file_extension in ["xlsx", "xls"]:
-        df = pd.read_excel(uploaded_file, engine='openpyxl')
+    try:
+        if file_extension == "csv":
+            df = pd.read_csv(uploaded_file)
+        elif file_extension in ["xlsx", "xls"]:
+            df = pd.read_excel(uploaded_file, engine='openpyxl')
+    except Exception as e:
+        st.error(f"Error reading file: {str(e)}")
+        st.stop()
     
     results = []
     
@@ -173,7 +190,7 @@ if uploaded_file is not None:
         # Additional logic for DECIMAL type
         if sql_type in ["FLOAT", "DOUBLE"]:
             max_decimal_places = max(get_decimal_places(min_val), get_decimal_places(max_val))
-            max_integer_digits = max(len(str(int(abs(min_val)))), len(str(int(abs(max_val)))))
+            max_integer_digits = max(len(str(int(float(min_val)))), len(str(int(float(max_val)))))
             total_digits = max_integer_digits + max_decimal_places
             if total_digits <= 65:
                 sql_type = f"DECIMAL({total_digits},{max_decimal_places})"
@@ -197,3 +214,4 @@ if uploaded_file is not None:
     )
 else:
     st.write("Please upload a CSV or Excel file to begin analysis.")
+
