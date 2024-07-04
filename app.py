@@ -97,7 +97,6 @@
 
 import streamlit as st
 import pandas as pd
-import numpy as np
 
 def is_numeric(value):
     try:
@@ -184,8 +183,12 @@ if uploaded_file is not None:
         series = df[col]
         sql_type = recommend_sql_type(col, series)
         
-        min_val = series.min() if not series.empty else None
-        max_val = series.max() if not series.empty else None
+        if pd.api.types.is_numeric_dtype(series):
+            min_val = series.min()
+            max_val = series.max()
+        else:
+            min_val = None
+            max_val = None
         
         results.append({
             "Column": col,
@@ -206,6 +209,7 @@ if uploaded_file is not None:
     )
 else:
     st.write("Please upload a CSV or Excel file to begin analysis.")
+
 
 
 
