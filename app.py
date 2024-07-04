@@ -64,7 +64,7 @@ def recommend_sql_type(col_name, series):
     else:
         return "TEXT"
 
-st.title("Python dataset analyzer / SQL data type recommender")
+st.title("Python dataset analyzer / SQL data type recommender - Build your SQL database effortlessly")
 
 st.write("""
 ## Instructions
